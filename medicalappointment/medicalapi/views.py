@@ -1,17 +1,62 @@
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes, authentication_classes
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from . import serializers
 from django.db.models import Q
 from . import models
 from rest_framework.parsers import MultiPartParser
 from . import utils
+from drf_yasg.utils import swagger_auto_schema
 
-# Create your views here.
+@swagger_auto_schema(
+        method='POST',
+        operation_id='register user',
+        operation_description="register user in the application using first_name, last_name, username, email and password",
+        request_body=serializers.UserSerializer,
+        responses={
+            201: 'User is registered successfully',
+            400: 'User exists by username/email or validation error'
+        })
 @api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    """
+    POST API for registering user to the application, either you are doctor/patient
+    """
+    payload = request.data
+    user_request = serializers.UserSerializer(data=payload)
+
+    user = utils.check_user_exists(
+            payload['username'],
+            payload['email'])
+        
+    if user is not None:
+        return Response({
+            'message': 'Another user exists with same username/email'}, 
+            status=400)
+
+    if user_request.is_valid():
+        user = user_request.save()
+        user.set_password(user_request.validated_data['password'])
+        user.save()
+
+        return Response({'message': 'user is registered successfully'}, status=201)
+
+@swagger_auto_schema(
+        method='POST',
+        operation_id='create doctor profile',
+        operation_description="create doctor profile on the basis of existing user. Specialization, available days, start time and end time are required.",
+        request_body=serializers.DoctorSerializer,
+        responses={
+            201: 'Doctor profile is created successfully',
+            400: 'User does not exists by username or validation error'
+        })
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 def create_doctor(request):
     """
     POST API to create doctor record
-    This API can only accessed by superuser
     """
     payload = request.data
     
@@ -19,34 +64,35 @@ def create_doctor(request):
 
     if doctor_request.is_valid():
 
-        user = utils.check_user_exists(
-            doctor_request.validated_data['user']['username'],
-            doctor_request.validated_data['user']['email'])
+        user = utils.check_user_by_username(request.user)
         
-        if user is not None:
+        if user is None:
             return Response({
-                'message': 'Doctor\'s record with provided username/email already exists'}, 
+                'message': 'User profile is not available with this username'}, 
                 status=400)
         
-        doctor_request.save()
+        models.Doctor.objects.create(
+            user = user,
+            **doctor_request.validated_data)
+        
+        # doctor_request.save()
 
         return Response(doctor_request.data, status=201)
     else:
         return Response({'message': 'something went wrong!'}, status=400)
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 def create_patient(request):
     payload = request.data
     patient_request = serializers.PatientSerializer(data=payload)
     if patient_request.is_valid():
 
-        user = utils.check_user_exists(
-            patient_request.validated_data['user']['username'],
-            patient_request.validated_data['user']['email'])
+        user = utils.check_user_by_username(request.user)
         
         if user is not None:
             return Response({
-                'message': 'Patient\'s record with provided username/email already exists'}, 
+                'message': 'User profile is not available with given username'}, 
                 status=400)
         
         patient_request.save()
@@ -55,46 +101,66 @@ def create_patient(request):
     else:
         return Response({'message': 'something went wrong!'}, status=400)
 
-@api_view(['PATCH', 'DELETE'])
+@api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
 def update_doctor(request, doctor_id):
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
             return Response({
                 'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
-    if request.method == 'PATCH':
-        doc_request = serializers.DoctorUpdateSerializer(data=request.data)
-        if doc_request.is_valid():
-            doctor.available_days = doc_request.validated_data['available_days']
-            doctor.start_time = doc_request.validated_data['start_time']
-            doctor.end_time = doc_request.validated_data['end_time']
-            doctor.save()
-        return Response(doc_request.data, status=200)
-    elif request.method == 'DELETE':
-        doctor.user.delete()
-        return Response({'message': 'doctor\'s record deleted successfully'}, status=200)    
+    # if request.method == 'PATCH':
+    doc_request = serializers.DoctorSerializer(data=request.data)
+    if doc_request.is_valid():
+        doctor.available_days = doc_request.validated_data['available_days']
+        doctor.start_time = doc_request.validated_data['start_time']
+        doctor.end_time = doc_request.validated_data['end_time']
+        doctor.specialization = doc_request.validated_data['specialization']
+        doctor.save()
+
+        return Response(doc_request.data, status=200)            
     return Response({'error': 'something went wrong!'}, status=400)
 
-@api_view(['PATCH', 'DELETE'])
+@api_view(['DELETE'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminUser])
+def delete_doctor(request, doctor_id):
+    doctor = utils.check_doctor_exists(doctor_id)
+    if doctor is None:
+            return Response({
+                'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
+    doctor.user.delete()
+    return Response({'message': 'doctor\'s record deleted successfully'}, status=200)
+
+@api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
 def update_patient(request, patient_id):
     patient = utils.check_patient_exists(patient_id)
     if patient is None:
             return Response({
                 'error': 'patient does\'nt exists by provided patient_id'}, status=404)
-    if request.method == 'PATCH':
-        patient_request = serializers.PatientUpdateSerializer(data=request.data)
-        if patient_request.is_valid():
-            patient.dob = patient_request.validated_data['dob']
-            patient.gender = patient_request.validated_data['gender']
-            patient.phone_number = patient_request.validated_data['phone_number']
-            patient.save()
-            
-        return Response(patient_request.data, status=200)
-    elif request.method == 'DELETE':
-        patient.user.delete()
-        return Response({'message': 'patient\'s record deleted successfully'}, status=200)    
+    patient_request = serializers.PatientSerializer(data=request.data)
+    if patient_request.is_valid():
+        patient.dob = patient_request.validated_data['dob']
+        patient.gender = patient_request.validated_data['gender']
+        patient.phone_number = patient_request.validated_data['phone_number']
+        patient.save()    
+        return Response(patient_request.data, status=200)   
     return Response({'error': 'something went wrong!'}, status=400)
 
+@api_view(['DELETE'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminUser])
+def delete_patient(request, patient_id):
+    patient = utils.check_patient_exists(patient_id)
+    if patient is None:
+            return Response({
+                'error': 'patient does\'nt exists by provided patient_id'}, status=404)
+    patient.user.delete()
+    return Response({'message': 'patient\'s record deleted successfully'}, status=200)
+
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminUser])
 def create_doctor_availability(request):
     doc_id = int(request.query_params['doctor_id'])
     doctor = utils.check_doctor_exists(doc_id)
@@ -119,8 +185,10 @@ def create_doctor_availability(request):
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
-def create_slots_bulk(request):
-    file = request.FILES['template']
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminUser])
+def create_doctor_availability_bulk(request):
+    file = request.FILES['upload_file']
     is_valid, error_msg = utils.validate_file(file)
     if not is_valid:
         return Response({'error': error_msg}, status=400)
@@ -144,6 +212,7 @@ def create_slots_bulk(request):
     return Response({'message':'Bulk upload of doctor availability is done successfully'}, status=200)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_appointment(request):
     """
     POST API to book an appointment with the doctor at given date time

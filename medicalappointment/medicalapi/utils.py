@@ -8,6 +8,10 @@ from datetime import datetime, date, time
 ALLOWED_EXTENSIONS = ['xlsx']
 MAX_FILE_SIZE = 10 * 1024 * 1024 # 10 MB
 
+def check_user_by_username(username):
+    return User.objects.filter(
+        Q(username = username)).first()
+
 def check_user_exists(username, email):
     """
     method to check whether user exists in database or not

@@ -1,43 +1,18 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Doctor, Patient, DoctorAvailability
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "username", "email"]
+        fields = ["first_name", "last_name", "username", "email", "password"]
 
-class DoctorSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
-
-    class Meta:
-        model = Doctor
-        fields = ["user", "specialization", "available_days", "start_time", "end_time"]
-
-    def create(self, validated_data):
-        user_data = validated_data.pop('user')  # extract nested user data
-        user = User.objects.create(**user_data)
-        doctor = Doctor.objects.create(user=user, **validated_data)
-        return doctor
-
-class DoctorUpdateSerializer(serializers.Serializer):
+class DoctorSerializer(serializers.Serializer):
+    specialization = serializers.CharField(max_length=100)
     available_days = serializers.CharField(max_length=100)
     start_time = serializers.TimeField(format='%H:%M')
     end_time = serializers.TimeField(format='%H:%M')
 
-class PatientSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
-    class Meta:
-        model = Patient
-        fields = ["user", "dob", "gender", "phone_number"]
-    
-    def create(self, validated_data):
-        user_data = validated_data.pop('user')  # extract nested user data
-        user = User.objects.create(**user_data)
-        patient = Patient.objects.create(user=user, **validated_data)
-        return patient
-
-class PatientUpdateSerializer(serializers.Serializer):
+class PatientSerializer(serializers.Serializer):
     dob = serializers.DateField(format='%d-%m-%Y')
     gender = serializers.CharField()
     phone_number = serializers.CharField(max_length = 12)
