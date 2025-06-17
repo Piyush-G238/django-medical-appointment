@@ -19,8 +19,7 @@ from django.urls import path, include, re_path
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-# from rest_framework.permissions import AllowAny
-# from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import AllowAny
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -28,11 +27,11 @@ schema_view = get_schema_view(
         default_version='v1',
         description = 'API documentation of Medical Appointment Booking System',
         contact=openapi.Contact(email='guptapiyush238@gmail.com',name='Piyush Gupta'),
-        license=openapi.License(name='BSD License')
+        license=openapi.License(name='BSD License'),
     ),
     public=True,
-    # permission_classes=[AllowAny],
-    # authentication_classes=[JWTAuthentication]
+    permission_classes=[AllowAny],
+    authentication_classes=[]
 )
 
 urlpatterns = [

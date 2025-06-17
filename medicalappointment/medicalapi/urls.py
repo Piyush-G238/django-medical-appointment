@@ -7,13 +7,14 @@ urlpatterns = [
 
     # doctor's endpoint
     path('doctors', views.create_doctor, name='create_doctor'),
-    path('doctors/<int:doctor_id>', views.update_doctor, name='update_doctor'),
-    path('doctors/<int:doctor_id>/delete', views.delete_doctor, name='delete_doctor'),
+    path('doctors/list', views.get_doctor_list, name='doctor_list'),
+    path('doctors/id/<int:doctor_id>', views.update_doctor, name='update_doctor'),
+    path('doctors/id/<int:doctor_id>/delete', views.delete_doctor, name='delete_doctor'),
 
     # patient's endpoint
     path('patients', views.create_patient, name='create_patient'),
-    path('patients/<int:patient_id>', views.update_patient, name='update_patient'),
-    path('patients/<int:patient_id>', views.delete_patient, name='delete_patient'),
+    path('patients/id/<int:patient_id>', views.update_patient, name='update_patient'),
+    path('patients/id/<int:patient_id>', views.delete_patient, name='delete_patient'),
 
     # availability endpoint
     path('slots', views.create_doctor_availability, name = 'create_doctor_availability'),

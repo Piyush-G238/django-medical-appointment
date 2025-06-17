@@ -1,3 +1,4 @@
+from datetime import datetime, time
 from rest_framework.decorators import api_view, parser_classes, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -6,9 +7,16 @@ from . import serializers
 from django.db.models import Q
 from . import models
 from rest_framework.parsers import MultiPartParser
+from rest_framework.pagination import PageNumberPagination
 from . import utils
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
+# global pagination
+paginate = PageNumberPagination()
+paginate.page_size = 10
+
+# user register
 @swagger_auto_schema(
         method='POST',
         operation_id='register user',
@@ -43,6 +51,7 @@ def register_user(request):
 
         return Response({'message': 'user is registered successfully'}, status=201)
 
+# create doctor
 @swagger_auto_schema(
         method='POST',
         operation_id='create doctor profile',
@@ -53,10 +62,11 @@ def register_user(request):
             400: 'User does not exists by username or validation error'
         })
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def create_doctor(request):
     """
-    POST API to create doctor record
+    POST API to create doctor record with provided details - specialization, available days, start time and end time. 
+    user will be associated based on login details
     """
     payload = request.data
     
@@ -74,41 +84,155 @@ def create_doctor(request):
         models.Doctor.objects.create(
             user = user,
             **doctor_request.validated_data)
-        
-        # doctor_request.save()
 
         return Response(doctor_request.data, status=201)
     else:
         return Response({'message': 'something went wrong!'}, status=400)
 
+# get list of doctors
+@swagger_auto_schema(
+        method='GET',
+        operation_id='get doctor list',
+        operation_description='get list of doctors with filter and pagination feature',
+        manual_parameters=[
+            openapi.Parameter(
+                name='page', 
+                required=True, 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_NUMBER),
+            openapi.Parameter(
+                name='sortby', 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_STRING),
+            openapi.Parameter(
+                name='sortorder', 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_STRING),
+            openapi.Parameter(
+                name='specialization',
+                required=False, 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                name='start_time',
+                required=False, 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                name='end_time',
+                required=False, 
+                in_=openapi.IN_QUERY, 
+                type=openapi.TYPE_STRING
+            )])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_doctor_list(request):
+    
+    spec_value = request.query_params.get('specialization')
+    start_val = request.query_params.get('start_time')
+    end_val = request.query_params.get('end_time')
+    sortby = request.query_params.get('sortby')
+    sortorder = request.query_params.get('sortorder')
+
+    doctors = models.Doctor.objects.all()
+
+    if spec_value:
+        doctors = doctors.filter(specialization = spec_value)
+
+    if start_val:
+        start_time = time.fromisoformat(start_val)
+        doctors = doctors.filter(start_time__lte = start_time)
+
+    if end_val:
+        end_time = time.fromisoformat(end_val)
+        doctors = doctors.filter(end_time__gte = end_time)
+
+    if sortby:
+        if not sortby in ['specialization', 'start_time', 'end_time', 'first_name', 'last_name', "created_at"]:
+            return Response({'error': 'please provide a valid sortby option'}, status=400)
+        
+        sortby_val = sortby
+
+        if sortby == 'first_name' or sortby == 'last_name':
+            sortby_val = f"user__{sortby}"
+        
+        if sortorder == 'desc':
+            sortby_val = f"-{sortby_val}"
+        doctors = doctors.order_by(sortby_val)
+
+    pagedate = paginate.paginate_queryset(doctors, request)
+
+    res = serializers.DoctorGetSerializer(pagedate, many=True)
+    return Response(res.data, status=200)
+
+# create patient
+@swagger_auto_schema(
+        method='POST',
+        operation_id='create patient',
+        operation_description='create patient record with provided details - gender, dob and phone number',
+        request_body=serializers.PatientSerializer,
+        responses={
+            201: 'created patient record successfully',
+            400: 'validation failed on request body'
+        })
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def create_patient(request):
+    """
+    POST API to create patient record with provided details - gender, dob and phone number. 
+    user will be associated based on login details
+    """
     payload = request.data
     patient_request = serializers.PatientSerializer(data=payload)
     if patient_request.is_valid():
 
         user = utils.check_user_by_username(request.user)
         
-        if user is not None:
+        if user is None:
             return Response({
                 'message': 'User profile is not available with given username'}, 
                 status=400)
         
-        patient_request.save()
-
+        models.Patient.objects.create(
+            user = user,
+            **patient_request.validated_data)
+        
         return Response(patient_request.data, status=201)
     else:
-        return Response({'message': 'something went wrong!'}, status=400)
+        field_error = []
+        for field in patient_request.fields:
+            field_error.append(
+                {
+                    field: patient_request.fields[field].error_messages
+                })
+        return Response(
+            {
+            'error': 'Invalid request body. Please try again',
+            'fields': field_error
+            }, status=400)
 
+# update doctor
+@swagger_auto_schema(
+        method='PATCH',
+        operation_id='update doctor',
+        operation_description='update doctor details with provided information',
+        request_body=serializers.DoctorSerializer,
+        manual_parameters=[
+            openapi.Parameter(
+                name='doctor_id',
+                in_=openapi.IN_PATH,
+                description='primary key of doctor record',
+                type=openapi.TYPE_NUMBER
+        )])
 @api_view(['PATCH'])
-@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def update_doctor(request, doctor_id):
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
             return Response({
                 'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
-    # if request.method == 'PATCH':
     doc_request = serializers.DoctorSerializer(data=request.data)
     if doc_request.is_valid():
         doctor.available_days = doc_request.validated_data['available_days']
@@ -120,8 +244,19 @@ def update_doctor(request, doctor_id):
         return Response(doc_request.data, status=200)            
     return Response({'error': 'something went wrong!'}, status=400)
 
+# delete doctor
+@swagger_auto_schema(
+        method='DELETE',
+        operation_id='delete doctor',
+        operation_description='delete doctor\'s record using p.k',
+        manual_parameters=[
+            openapi.Parameter(name='doctor_id', in_=openapi.IN_PATH, type=openapi.TYPE_NUMBER)
+        ],
+        responses={
+            200: 'record deleted successfully',
+            404: 'record not found by p.k'
+        })
 @api_view(['DELETE'])
-@authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminUser])
 def delete_doctor(request, doctor_id):
     doctor = utils.check_doctor_exists(doctor_id)
@@ -131,8 +266,9 @@ def delete_doctor(request, doctor_id):
     doctor.user.delete()
     return Response({'message': 'doctor\'s record deleted successfully'}, status=200)
 
+# update patient
 @api_view(['PATCH'])
-@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def update_patient(request, patient_id):
     patient = utils.check_patient_exists(patient_id)
     if patient is None:
@@ -147,8 +283,8 @@ def update_patient(request, patient_id):
         return Response(patient_request.data, status=200)   
     return Response({'error': 'something went wrong!'}, status=400)
 
+# delete patient
 @api_view(['DELETE'])
-@authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminUser])
 def delete_patient(request, patient_id):
     patient = utils.check_patient_exists(patient_id)
@@ -158,8 +294,8 @@ def delete_patient(request, patient_id):
     patient.user.delete()
     return Response({'message': 'patient\'s record deleted successfully'}, status=200)
 
+# create doctor availability
 @api_view(['POST'])
-@authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminUser])
 def create_doctor_availability(request):
     doc_id = int(request.query_params['doctor_id'])
@@ -185,7 +321,6 @@ def create_doctor_availability(request):
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
-@authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminUser])
 def create_doctor_availability_bulk(request):
     file = request.FILES['upload_file']
@@ -221,7 +356,7 @@ def create_appointment(request):
     3. if all parameter are ok, then book appointment
     """
     doc_id = int(request.query_params['doctor_id'])
-    pat_id = request.query_params['patient_id']
+    pat_id = int(request.query_params['patient_id'])
 
     doctor = utils.check_doctor_exists(doc_id)
     patient = utils.check_patient_exists(pat_id)
