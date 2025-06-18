@@ -33,6 +33,9 @@ class PatientSerializer(serializers.Serializer):
     gender = serializers.CharField(allow_null=True)
     phone_number = serializers.CharField(max_length = 12)
 
+class PatientGetSerializer(PatientSerializer):
+    user = UserGetSerializer()
+
 class DoctorAvailabilitySerializer(serializers.Serializer):
     date = serializers.DateField(
         format='%d-%m-%Y', 
@@ -45,3 +48,20 @@ class AppointmentSerializer(serializers.Serializer):
         format='%d-%m-%Y', 
         input_formats=['%d-%m-%Y'])
     time = serializers.TimeField(format='%H:%M')
+
+class AppointmentGetSerializer(AppointmentSerializer):
+    doctor = DoctorGetSerializer()
+    patient = PatientGetSerializer()
+    status = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+class PrescriptionSerializer(serializers.Serializer):
+    notes = serializers.CharField()
+    medications = serializers.CharField()
+
+class ResponseSerializer(serializers.Serializer):
+    message=serializers.CharField()
+    status=serializers.IntegerField()
+
+class FieldErrorSerializer(ResponseSerializer):
+    field = serializers.ListField()

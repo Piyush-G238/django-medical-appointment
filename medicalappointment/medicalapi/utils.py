@@ -168,3 +168,6 @@ def create_individual_slot(data: dict):
     
 def check_doctor_by_username(username):
     return models.Doctor.objects.filter(user__username = username).first()
+
+def check_patient_by_username(username):
+    return models.Patient.objects.filter(user__username = username).first()

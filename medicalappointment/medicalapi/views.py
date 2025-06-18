@@ -1,7 +1,6 @@
 from datetime import datetime, time
-from rest_framework.decorators import api_view, parser_classes, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.response import Response
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from . import serializers
 from django.db.models import Q
@@ -40,16 +39,20 @@ def register_user(request):
             payload['email'])
         
     if user is not None:
-        return Response({
-            'message': 'Another user exists with same username/email'}, 
+        err = serializers.ResponseSerializer(
+            message='Another user exists with same username/email',
             status=400)
+        return Response(err,status=400)
 
     if user_request.is_valid():
         user = user_request.save()
         user.set_password(user_request.validated_data['password'])
         user.save()
-
-        return Response({'message': 'user is registered successfully'}, status=201)
+        
+        res = serializers.ResponseSerializer(
+            message='Congratulations! You have registered successfully',
+            status=201)
+        return Response(res, status=201)
 
 # create doctor
 @swagger_auto_schema(
@@ -77,17 +80,20 @@ def create_doctor(request):
         user = utils.check_user_by_username(request.user)
         
         if user is None:
-            return Response({
-                'message': 'User profile is not available with this username'}, 
-                status=400)
+            err = serializers.ResponseSerializer(
+                message='User profile is not available with this username',
+                status=404)
+            return Response(err, status=400)
         
         models.Doctor.objects.create(
             user = user,
             **doctor_request.validated_data)
-
-        return Response(doctor_request.data, status=201)
+        
+        res = serializers.ResponseSerializer(message='doctor profile is saved successfully',status=201)
+        return Response(res, status=201)
     else:
-        return Response({'message': 'something went wrong!'}, status=400)
+        res = serializers.ResponseSerializer(message='something went wrong while saving doctor profile',status=400)
+        return Response(res, status=400)
 
 # get list of doctors
 @swagger_auto_schema(
@@ -149,9 +155,10 @@ def get_doctor_list(request):
         end_time = time.fromisoformat(end_val)
         doctors = doctors.filter(end_time__gte = end_time)
 
-    if sortby:
+    if sortby and sortorder:
         if not sortby in ['specialization', 'start_time', 'end_time', 'first_name', 'last_name', "created_at"]:
-            return Response({'error': 'please provide a valid sortby option'}, status=400)
+            err = serializers.ResponseSerializer(message='please provide a valid sortby option',status=400)
+            return Response(err, status=400)
         
         sortby_val = sortby
 
@@ -191,27 +198,24 @@ def create_patient(request):
         user = utils.check_user_by_username(request.user)
         
         if user is None:
-            return Response({
-                'message': 'User profile is not available with given username'}, 
-                status=400)
+            err = serializers.ResponseSerializer(
+                message='User profile is not available with given username',
+                status=404)
+            return Response(err, status=400)
         
         models.Patient.objects.create(
             user = user,
             **patient_request.validated_data)
         
-        return Response(patient_request.data, status=201)
+        res = serializers.ResponseSerializer(
+                message='Patient profile is saved successfully',
+                status=201)
+        return Response(res, status=201)
     else:
-        field_error = []
-        for field in patient_request.fields:
-            field_error.append(
-                {
-                    field: patient_request.fields[field].error_messages
-                })
-        return Response(
-            {
-            'error': 'Invalid request body. Please try again',
-            'fields': field_error
-            }, status=400)
+        err = serializers.ResponseSerializer(
+                message='Something went wrong while saving patient profile',
+                status=400)
+        return Response(err, status=400)
 
 # update doctor
 @swagger_auto_schema(
@@ -231,8 +235,10 @@ def create_patient(request):
 def update_doctor(request, doctor_id):
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
-            return Response({
-                'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
+            err = serializers.ResponseSerializer(
+                message='doctor does\'nt exists by provided doctor_id',
+                status=404)
+            return Response(err, status=404)
     doc_request = serializers.DoctorSerializer(data=request.data)
     if doc_request.is_valid():
         doctor.available_days = doc_request.validated_data['available_days']
@@ -241,8 +247,15 @@ def update_doctor(request, doctor_id):
         doctor.specialization = doc_request.validated_data['specialization']
         doctor.save()
 
-        return Response(doc_request.data, status=200)            
-    return Response({'error': 'something went wrong!'}, status=400)
+        res = serializers.ResponseSerializer(
+                message='doctor profile is updated successfully',
+                status=200)
+        return Response(res, status=200)
+    
+    err = serializers.ResponseSerializer(
+                message='something went wrong while updating doctor details',
+                status=400)            
+    return Response(err, status=400)
 
 # delete doctor
 @swagger_auto_schema(
@@ -261,12 +274,29 @@ def update_doctor(request, doctor_id):
 def delete_doctor(request, doctor_id):
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
-            return Response({
-                'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
+            err = serializers.ResponseSerializer(
+                message='doctor does\'nt exists by provided doctor_id',
+                status=404)
+            return Response(err, status=404)
     doctor.user.delete()
-    return Response({'message': 'doctor\'s record deleted successfully'}, status=200)
+    res = serializers.ResponseSerializer(
+                message='doctor\'s record deleted successfully',
+                status=200)
+    return Response(res, status=200)
 
 # update patient
+@swagger_auto_schema(
+        method='PATCH',
+        operation_id='update patient',
+        operation_description='update patient details with provided information',
+        request_body=serializers.PatientSerializer,
+        manual_parameters=[
+            openapi.Parameter(
+                name='patient_id',
+                in_=openapi.IN_PATH,
+                description='primary key of doctor record',
+                type=openapi.TYPE_NUMBER
+        )])
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_patient(request, patient_id):
@@ -284,6 +314,17 @@ def update_patient(request, patient_id):
     return Response({'error': 'something went wrong!'}, status=400)
 
 # delete patient
+@swagger_auto_schema(
+        method='DELETE',
+        operation_id='delete patient',
+        operation_description='delete patient\'s record using p.k',
+        manual_parameters=[
+            openapi.Parameter(name='patient_id', in_=openapi.IN_PATH, type=openapi.TYPE_NUMBER)
+        ],
+        responses={
+            200: 'record deleted successfully',
+            404: 'record not found by p.k'
+        })
 @api_view(['DELETE'])
 @permission_classes([IsAdminUser])
 def delete_patient(request, patient_id):
@@ -295,6 +336,15 @@ def delete_patient(request, patient_id):
     return Response({'message': 'patient\'s record deleted successfully'}, status=200)
 
 # create doctor availability
+@swagger_auto_schema(
+        method='POST',
+        operation_id='create doctor availability',
+        operation_description='create doctor availability with date, start-time and end-time',
+        request_body=serializers.DoctorAvailabilitySerializer,
+        responses={
+            201: 'created doctor availability record successfully',
+            400: 'validation failed on request body'
+        })
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def create_doctor_availability(request):
@@ -319,6 +369,17 @@ def create_doctor_availability(request):
             status=201)
     return Response({'error': 'something went wrong!'}, status=400)
 
+# create doctor availability in bulk
+@swagger_auto_schema(
+        method='POST',
+        operation_id='create doctor availability bulk',
+        operation_description='create doctor availability in bulk using excel template',
+        # manual_parameters=[openapi],
+        # request_body=serializers.DoctorAvailabilitySerializer,
+        responses={
+            201: 'created doctor availability record successfully',
+            400: 'validation failed on request body'
+        })
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 @permission_classes([IsAdminUser])
@@ -346,6 +407,17 @@ def create_doctor_availability_bulk(request):
 
     return Response({'message':'Bulk upload of doctor availability is done successfully'}, status=200)
 
+# create appointment
+@swagger_auto_schema(
+        method='POST',
+        operation_id='book appointment',
+        operation_description='book appointment with doctor at given date and time',
+        request_body=serializers.AppointmentSerializer,
+        manual_parameters=[openapi.Parameter(name='doctor_id', in_=openapi.IN_QUERY, type=openapi.TYPE_NUMBER, required=True)],
+        responses={
+            201: 'booked appointment with doctor successfully',
+            400: 'validation failed on request body'
+        })
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_appointment(request):
@@ -356,10 +428,10 @@ def create_appointment(request):
     3. if all parameter are ok, then book appointment
     """
     doc_id = int(request.query_params['doctor_id'])
-    pat_id = int(request.query_params['patient_id'])
+    # pat_id = int(request.query_params['patient_id'])
 
     doctor = utils.check_doctor_exists(doc_id)
-    patient = utils.check_patient_exists(pat_id)
+    patient = utils.check_patient_by_username(request.user)
     if doctor is None:
         return Response({
                 'error': 'doctor does\'nt exists by provided doctor_id'}, status=404)
@@ -402,3 +474,135 @@ def create_appointment(request):
         return Response({
                 'message': 'Your appointment with doctor is booked successfully'}, 
                 status=201)
+    return Response({
+        'message': 'Something went wrong, please try again.'}, 
+        status=400)
+
+# get list of patients
+@swagger_auto_schema(
+        method='GET',
+        operation_id='get patient list',
+        operation_description='get list of patients with filter, sorting and pagination features',
+        manual_parameters=[
+            openapi.Parameter(name='gender', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default='M'),
+            openapi.Parameter(name='min_dob', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name= 'max_dob', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='search', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='sortby', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default='created_at'),
+            openapi.Parameter(name='sortorder', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default='desc')
+        ])
+@api_view(['GET'])
+def get_patient_list(request):
+    gen_val = request.query_params.get('gender')
+    min_dob_val = request.query_params.get('min_dob')
+    max_dob_val = request.query_params.get('max_dob')
+    search_val = request.query_params.get('search')
+    sortby_val = request.query_params.get('sortby')
+    sortorder_val = request.query_params.get('sortorder')
+
+    patients = models.Patient.objects.all()
+
+    if gen_val:
+        patients = patients.filter(gender = gen_val)
+    if min_dob_val and max_dob_val:
+        try:
+            min_dob = datetime.strptime(min_dob_val, '%d-%m-%Y')
+            max_dob = datetime.strptime(max_dob_val, '%d-%m-%Y')
+            patients = patients.filter(Q(dob__gte = min_dob) & Q(dob__lte = max_dob))
+        except ValueError:
+            return Response({'error': 'Unable to parse min_dob/max_dob'}, status=400)
+    if search_val:
+        patients = patients.filter(
+            Q(user__first_name__icontains = search_val) |
+            Q(user__last_name__icontains = search_val) |
+            Q(user__username__icontains = search_val))
+    if sortby_val and sortorder_val:
+        if not sortby_val in ['first_name', 'last_name', 'dob', 'gender', 'created_at']:
+            return Response({'error': 'please provide a valid sortby option'}, status=400)
+        sortby = sortby_val
+        if sortby == 'first_name' or sortby == 'last_name':
+            sortby = f"user__{sortby}"
+        if sortorder_val == 'desc':
+            sortby = f"-{sortby}"
+        patients.order_by(sortby)
+    
+    pagedata = paginate.paginate_queryset(patients, request)
+    res = serializers.PatientGetSerializer(pagedata, many=True)
+    return Response(res.data, status=200)
+
+# get list of appointments
+@swagger_auto_schema(
+        method='GET',
+        operation_id='get appointments list',
+        operation_description='get list of appointments with filter, sorting and pagination features',
+        manual_parameters=[
+            openapi.Parameter(name='specialization', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='doctor', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='min_date', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='max_date', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+            openapi.Parameter(name='sortby', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default='created_at'),
+            openapi.Parameter(name='sortorder', type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default='desc')
+        ])
+@api_view(['GET'])
+def get_appointments_of_patient(request):
+
+    spec_val = request.query_params.get('specialization')
+    doc_val = request.query_params.get('doctor') # doctor username
+    status_val = request.query_params.get('status_val')
+    min_date_val = request.query_params.get('min_date')
+    max_date_val = request.query_params.get('max_date')
+    sortby_val = request.query_params.get('sortby')
+    sortorder_val = request.query_params.get('sortorder')
+
+    patient = utils.check_patient_by_username(request.user)
+    if patient is None:
+        return Response({'error':'patient does\'nt exists by username'},status=404)
+
+    appointments = models.Appointment.objects.filter(patient = patient)
+
+    if spec_val:
+        appointments = appointments.filter(doctor__specialization = spec_val)
+    if doc_val:
+        appointments = appointments.filter(doctor__user__username = doc_val)
+    if status_val:
+        appointments = appointments.filter(status = status_val)
+    if min_date_val and max_date_val:
+        try:
+            min_date = datetime.strptime(min_date_val, '%d-%m-%Y')
+            max_date = datetime.strptime(max_date_val, '%d-%m-%Y')
+            patients = patients.filter(Q(date__gte = min_date) & Q(date__lte = max_date))
+        except ValueError:
+            return Response({'error': 'Unable to parse min_dob/max_dob'}, status=400)
+    if sortby_val and sortorder_val:
+        if not sortby_val in ['date', 'status', 'doctor_username', 'patient_username', 'created_at']:
+            return Response({'error': 'please provide a valid sortby option'}, status=400)
+        
+        sortby = sortby_val
+        if sortby_val == 'doctor_username':
+            sortby = f'doctor__user__username'
+        elif sortby_val == 'patient_username':
+            sortby = f'patient__user__username'
+        if sortorder_val == 'desc':
+            sortby = f'-{sortby}'
+        appointments = appointments.order_by(sortby)
+
+    pagedata = paginate.paginate_queryset(appointments, request)
+    res = serializers.AppointmentGetSerializer(pagedata, many=True)
+    return Response(res.data, status=200)
+
+@swagger_auto_schema
+@api_view(['POST'])
+def create_prescription(request, appointment_id):
+    
+    payload = request.data
+    prescription_request = serializers.PrescriptionSerializer(data=payload)
+    if prescription_request.is_valid():
+        appointment = models.Appointment.objects.filter(appointment_id = appointment_id).first()
+        if appointment is None:
+            return Response({'error': 'Appointment not found by provided appointment id'}, status=404)
+        models.Prescription.objects.create(
+            appointment = appointment,
+            **prescription_request.validated_data)
+        return Response({'message':'prescription added successfully in the appointment'},status=201)
+    else:
+        return Response({'error':'something went wrong'},status=400)

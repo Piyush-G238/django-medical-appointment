@@ -13,6 +13,7 @@ urlpatterns = [
 
     # patient's endpoint
     path('patients', views.create_patient, name='create_patient'),
+    path('patients/list', views.get_patient_list, name='patient_list'),
     path('patients/id/<int:patient_id>', views.update_patient, name='update_patient'),
     path('patients/id/<int:patient_id>', views.delete_patient, name='delete_patient'),
 
@@ -22,9 +23,8 @@ urlpatterns = [
 
     # appointment endpoint
     path('appointments', views.create_appointment, name='create_appointment'),
+    path('appointments/list', views.get_appointments_of_patient, name='patient_appointments')
 
     # prescription endpoint
-
-    
-
+    # path('prescriptions/<int:appointment_id>')
 ]
