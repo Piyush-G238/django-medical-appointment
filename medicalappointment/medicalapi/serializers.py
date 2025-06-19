@@ -60,8 +60,12 @@ class PrescriptionSerializer(serializers.Serializer):
     medications = serializers.CharField()
 
 class ResponseSerializer(serializers.Serializer):
+    url=serializers.CharField()
     message=serializers.CharField()
     status=serializers.IntegerField()
 
 class FieldErrorSerializer(ResponseSerializer):
     field = serializers.ListField()
+
+class BulkErrorSerializer(ResponseSerializer):
+    data = serializers.ListField()
