@@ -29,7 +29,7 @@ paginate.page_size = 10
 @permission_classes([AllowAny])
 def register_user(request):
 
-    url = request.stream.path
+    url = request.get_full_path()
 
     payload = request.data
     user_request = serializers.UserSerializer(data=payload)
@@ -75,7 +75,8 @@ def register_user(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_doctor(request):
-    url = request.stream.path
+
+    url = request.get_full_path()
 
     payload = request.data
     
@@ -149,7 +150,7 @@ def create_doctor(request):
 @permission_classes([IsAuthenticated])
 def get_doctor_list(request):
     
-    url = request.stream.path
+    url = request.get_full_path()
 
     spec_value = request.query_params.get('specialization')
     start_val = request.query_params.get('start_time')
@@ -206,7 +207,7 @@ def get_doctor_list(request):
 @permission_classes([IsAuthenticated])
 def create_patient(request):
 
-    url = request.stream.path
+    url = request.get_full_path()
 
     payload = request.data
     patient_request = serializers.PatientSerializer(data=payload)
@@ -253,7 +254,7 @@ def create_patient(request):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_doctor(request, doctor_id):
-    url = request.stream.path
+    url = request.get_full_path()
 
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
@@ -297,7 +298,7 @@ def update_doctor(request, doctor_id):
 @api_view(['DELETE'])
 @permission_classes([IsAdminUser])
 def delete_doctor(request, doctor_id):
-    url = request.stream.path
+    url = request.get_full_path()
 
     doctor = utils.check_doctor_exists(doctor_id)
     if doctor is None:
@@ -329,7 +330,7 @@ def delete_doctor(request, doctor_id):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_patient(request, patient_id):
-    url = request.stream.path
+    url = request.get_full_path()
     patient = utils.check_patient_exists(patient_id)
     if patient is None:
             err = serializers.ResponseSerializer({
@@ -373,7 +374,7 @@ def update_patient(request, patient_id):
 @api_view(['DELETE'])
 @permission_classes([IsAdminUser])
 def delete_patient(request, patient_id):
-    url = request.stream.path
+    url = request.get_full_path()
     patient = utils.check_patient_exists(patient_id)
     if patient is None:
             err = serializers.ResponseSerializer({
@@ -403,7 +404,7 @@ def delete_patient(request, patient_id):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def create_doctor_availability(request):
-    url = request.stream.path
+    url = request.get_full_path()
 
     doc_id = int(request.query_params['doctor_id'])
     doctor = utils.check_doctor_exists(doc_id)
@@ -447,7 +448,7 @@ def create_doctor_availability(request):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAdminUser])
 def create_doctor_availability_bulk(request):
-    url = request.stream.path
+    url = request.get_full_path()
     file = request.FILES['upload_file']
     is_valid, error_msg = utils.validate_file(file)
     if not is_valid:
@@ -504,7 +505,7 @@ def create_doctor_availability_bulk(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_appointment(request):
-    url = request.stream.path
+    url = request.get_full_path()
 
     doc_id = int(request.query_params['doctor_id'])
 
@@ -585,7 +586,7 @@ def create_appointment(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_patient_list(request):
-    url = request.stream.path
+    url = request.get_full_path()
 
     gen_val = request.query_params.get('gender')
     min_dob_val = request.query_params.get('min_dob')
@@ -650,7 +651,7 @@ def get_patient_list(request):
 @api_view(['GET'])
 def get_appointments_of_patient(request):
 
-    url = request.stream.path
+    url = request.get_full_path()
 
     spec_val = request.query_params.get('specialization')
     doc_val = request.query_params.get('doctor') # doctor username
@@ -712,7 +713,7 @@ def get_appointments_of_patient(request):
 @swagger_auto_schema
 @api_view(['POST'])
 def create_prescription(request, appointment_id):
-    url = request.stream.path
+    url = request.get_full_path()
 
     payload = request.data
     prescription_request = serializers.PrescriptionSerializer(data=payload)
