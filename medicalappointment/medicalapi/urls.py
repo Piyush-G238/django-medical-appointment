@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 urlpatterns = [
@@ -6,10 +6,11 @@ urlpatterns = [
     path('auth/register', views.register_user, name='register_user'),
 
     # doctor's endpoint
-    path('doctors', views.create_doctor, name='create_doctor'),
-    path('doctors/list', views.get_doctor_list, name='doctor_list'),
-    path('doctors/id/<int:doctor_id>', views.update_doctor, name='update_doctor'),
-    path('doctors/id/<int:doctor_id>/delete', views.delete_doctor, name='delete_doctor'),
+    path('doctors/', include('medicalapi.doctorurls')),
+    # path('doctors', views.create_doctor, name='create_doctor'),
+    # path('doctors/list', views.get_doctor_list, name='doctor_list'),
+    # path('doctors/id/<int:doctor_id>', views.update_doctor, name='update_doctor'),
+    # path('doctors/id/<int:doctor_id>/delete', views.delete_doctor, name='delete_doctor'),
 
     # patient's endpoint
     path('patients', views.create_patient, name='create_patient'),
